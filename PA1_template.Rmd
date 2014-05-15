@@ -1,16 +1,66 @@
-# Reproducible Research: Peer Assessment 1
+Reproducible Research: Peer Assessment 1
+========================================================
 
+The following libraries need to be instaled before running the code:
+```{r loadlibs}
+library(lattice)
+library(xtable)
+library(plyr)
+```
 
 ## Loading and preprocessing the data
+
+Unzip, load and arrange data over the file **activity.zip** into a dataframe 
+named **act**. Create new variable **fdate** that has the measurements date in 
+POSIXct format.
+
+```{r loaddata}
+unzip("activity.zip")
+act <- read.csv("activity.csv")
+act$fdate <- as.POSIXct(strptime(paste(act$date 
+			, ifelse(act$interval < 10, paste0("000", act$interval) 
+					 , ifelse(act$interval < 100, paste0("00", act$interval) 
+					 		 , ifelse(act$interval < 1000
+					 		 		 , paste0("0", act$interval)
+					 		 		 , act$interval)))), "%Y-%m-%d %H%M"))
+dly <- ddply(act, ~date, summarise, Mean = mean(steps, na.rm = T) 
+	  , Median = median(steps, na.rm = T), Steps = sum(steps, na.rm = T))
+file.remove("activity.csv")
+```
 
 
 
 ## What is mean total number of steps taken per day?
 
+The following plot shows that most days have a near 10k valid step samples, 
+but there are several of days (16% approx.) between 0 and 2k.
+
+```{r stepshist, fig.width=8, fig.height=6}
+histogram(~Steps, data = dly, breaks = 8 
+		  , main = "Distribution of Steps per Day")
+```
+
+
+In this table we can find the mean, median and total number of steps for each 
+day in the dataset. Now, it is curious that many observations are in 0, which 
+is why the median is 0 for each measured day.
+```{r stepstable, results='asis'}
+names(dly) <- c("Measurement Date", "Daily Mean (Steps)" 
+					   , "Daily Median (Steps)", "Total Daily (Steps)")
+print(xtable(dly), type = "html", align = rep("c", 3) 
+	  , include.rownames=F 
+	  , html.table.attributes = "border = '1'")
+quantile(dly$Mean, na.rm = T)
+```
+
 
 
 ## What is the average daily activity pattern?
 
+```{r dlypattern, fig.width=8, fig.height=6}
+xyplot(steps~fdate, data = act, type = "l"
+		  , main = "Evolution of steps each 5 minutes")
+```
 
 
 ## Imputing missing values
@@ -18,3 +68,7 @@
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r fig.width=7, fig.height=6}
+#plot(cars)
+```
