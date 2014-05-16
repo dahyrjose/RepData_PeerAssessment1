@@ -1,74 +1,148 @@
 Reproducible Research: Peer Assessment 1
-========================================================
+========================================
 
-The following libraries need to be instaled before running the code:
-```{r loadlibs}
+
+In the development of this assignment we will work with data obtained from 
+personal activity monitoring devices. These measurements are gathered each 5
+minutes for every individual through out a day and we will be working with two 
+months of data.
+
+
+The first thing we will do is prepare our environment, including the loading 
+of libraries and setting of english language in order to achieve easier 
+reproducibility. Note that required libraries need to be installed before 
+running any code.
+
+```{r loadlibs, results = FALSE, message=FALSE}
+Sys.setenv(LANGUAGE="en")
+Sys.setlocale(category = "LC_ALL", locale = "C")
 library(lattice)
 library(xtable)
 library(plyr)
 ```
 
+
+
 ## Loading and preprocessing the data
 
-Unzip, load and arrange data over the file **activity.zip** into a dataframe 
-named **act**. Create new variable **fdate** that has the measurements date in 
-POSIXct format.
+Now let's unzip, load and arrange data from the given file: **activity.zip** 
+into a dataframe named **act**.
 
-```{r loaddata}
+```{r loaddata, results = FALSE, message=FALSE}
 unzip("activity.zip")
 act <- read.csv("activity.csv")
-act$fdate <- as.POSIXct(strptime(paste(act$date 
-			, ifelse(act$interval < 10, paste0("000", act$interval) 
-					 , ifelse(act$interval < 100, paste0("00", act$interval) 
-					 		 , ifelse(act$interval < 1000
-					 		 		 , paste0("0", act$interval)
-					 		 		 , act$interval)))), "%Y-%m-%d %H%M"))
-dly <- ddply(act, ~date, summarise, Mean = mean(steps, na.rm = T) 
-	  , Median = median(steps, na.rm = T), Steps = sum(steps, na.rm = T))
 file.remove("activity.csv")
 ```
+
+In the remaining sections we will answer the questions required in the 
+assignment.
 
 
 
 ## What is mean total number of steps taken per day?
 
-The following plot shows that most days have a near 10k valid step samples, 
-but there are several of days (16% approx.) between 0 and 2k.
+The first thing we'll do is a summary of the steps per day, with that we build 
+the plot below, which shows that most days have a near 10k valid step samples, 
+but also there are several days (16% approx.) between 0 and 2k.
 
 ```{r stepshist, fig.width=8, fig.height=6}
+dly <- ddply(act, ~date, summarise, Steps = sum(steps, na.rm = T))
 histogram(~Steps, data = dly, breaks = 8 
 		  , main = "Distribution of Steps per Day")
 ```
 
 
-In this table we can find the mean, median and total number of steps for each 
-day in the dataset. Now, it is curious that many observations are in 0, which 
-is why the median is 0 for each measured day.
-```{r stepstable, results='asis'}
-names(dly) <- c("Measurement Date", "Daily Mean (Steps)" 
-					   , "Daily Median (Steps)", "Total Daily (Steps)")
-print(xtable(dly), type = "html", align = rep("c", 3) 
-	  , include.rownames=F 
-	  , html.table.attributes = "border = '1'")
-quantile(dly$Mean, na.rm = T)
+Now let's see, over daily aggregated data, the mean and median values of the 
+total amount of steps per day.
+
+```{r stepstable}
+paste("Mean steps over all days: ", round(mean(dly$Steps, na.rm = T), 2))
+paste("Median steps over all days: ", median(dly$Steps, na.rm = T))
 ```
 
 
 
 ## What is the average daily activity pattern?
 
+The following time series shows the evolution of the average number of steps 
+across all days in the dataset. It was built using a new dataset with the 
+mean steps of each interval across the different days in the dataset.
+
 ```{r dlypattern, fig.width=8, fig.height=6}
-xyplot(steps~fdate, data = act, type = "l"
-		  , main = "Evolution of steps each 5 minutes")
+int <- ddply(act, ~interval, summarise, Mean = mean(steps, na.rm = T))
+xyplot(Mean~interval, data = int, type = "l" 
+	   , xlab = "Interval", ylab = "Mean Steps across Days")
 ```
 
 
+And this is the 5-minute interval with the maximum average number of steps:
+```{r peakdate}
+int[int$Mean == max(int$Mean, na.rm = T), "interval"]
+```
+
+
+
 ## Imputing missing values
+
+Let's look at the total number of missing values in the dataset
+
+```{r missingdata}
+nrow(act[is.na(act$steps), ])
+```
+
+With the objective to fill NA's in the dataset we will use mean values for 
+each interval and assign that to each NA row in a new data frame.
+
+```{r fillna}
+imp <- act
+imp$imputed <- ifelse(is.na(imp$steps), as.integer(merge(imp, int)$Mean)
+					, imp$steps)
+```
+
+Compare this new histogram of the data with NA's filled with mean steps per 
+interval with the first plot in this document.
+
+```{r newhist, fig.width=8, fig.height=6}
+dli <- ddply(imp, ~date, summarise, steps = sum(steps))
+histogram(~steps, data = dli, breaks = 8 
+		  , main = "Distribution of Steps per Day")
+```
+
+Also the new mean and median values for the arranged dataset.
+
+```{r newsummary, fig.width=8, fig.height=6}
+paste("Mean steps over all days: ", round(mean(dli$steps, na.rm = T), 2))
+paste("Median steps over all days: ", median(dli$steps, na.rm = T))
+```
+
+Note that summarised values differ a lot from original data where only we only 
+applied na.rm = T. The histogram now looks more like a normal distribution 
+and the mean value is closer to the median.
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
-```{r fig.width=7, fig.height=6}
-#plot(cars)
+Now let's look at the intervals evolution, comparing weekdays vs. weekends. In 
+the following graph we find that the mornings of the weekdays have more activity 
+than weekends', what could be justified with most people going to work or to 
+school, for example. Weekends on the other hand have a better distribution of 
+activity across the whole day, which can make us think that most individuals 
+spend their weekdays in activities that require less physical movement compared 
+to weekends.
+
+```{r weekdaypattern, fig.width=8, fig.height=10}
+act$weekday <- weekdays(as.POSIXct(strptime(act$date, "%Y-%m-%d")))
+act$daycategory <- ifelse(act$weekday %in% c("Saturday", "Sunday") 
+						  , "weekend", "weekday")
+wdy <- ddply(act, ~daycategory + interval, summarise 
+			 , Mean = mean(steps, na.rm = T))
+xyplot(Mean~interval | daycategory, data = wdy, type = "l" 
+	   , xlab = "Interval", ylab = "Mean Steps across Intervals" 
+	   , layout = c(1, 2))
 ```
+
+
+
+
+### Dahyr J. Vergara Suarez
